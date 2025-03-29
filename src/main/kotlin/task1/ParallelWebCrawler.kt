@@ -1,0 +1,95 @@
+package ru.glebik.task1
+
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Semaphore
+import org.jsoup.Jsoup
+import ru.glebik.FileHelper
+import ru.glebik.FileHelper.normalizeUrl
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+
+class ParallelWebCrawler(
+    private val urls: List<String>,
+    private val targetPageCount: Int = DEFAULT_TARGET_PER_PAGE_COUNT,
+    private val minWordsPerPage: Int = DEFAULT_MIN_WORDS_PER_COUNT,
+) {
+    private val visited = ConcurrentHashMap.newKeySet<String>()
+    private val urlsQueue = ConcurrentLinkedQueue<String>().apply {
+        addAll(urls)
+    }
+
+    private var pageCounter = AtomicInteger(1)
+    private var isCrawlerRunning = AtomicBoolean(true)
+    private val semaphore = Semaphore(30)
+
+    suspend fun crawl() = coroutineScope {
+        if (urls.isEmpty()) {
+            return@coroutineScope
+        }
+
+        val jobs = mutableListOf<Job>()
+
+        while (isCrawlerRunning.get()) {
+            if (urlsQueue.isNotEmpty() && pageCounter.get() < targetPageCount) {
+                val url = urlsQueue.poll().normalizeUrl()
+                jobs += launch(SupervisorJob() + Dispatchers.IO) {
+                    semaphore.acquire()
+                    crawlPage(url)
+                    semaphore.release()
+                }
+            }
+        }
+
+        jobs.forEach { it.cancel() }
+        println("Downloaded $pageCounter pages.")
+    }
+
+    private fun crawlPage(url: String?) {
+        runCatching {
+            if (url == null || visited.contains(url)) return
+
+            val doc = Jsoup.connect(url).userAgent("Mozilla").get()
+            val text = doc.body().text()
+
+            val wordCount = text.split("\\s+".toRegex()).size
+            if (wordCount >= minWordsPerPage) {
+                val filename = FileHelper.getPageSaveName(pageCounter.get())
+                val fileSavePath = FileHelper.getPageSavePath(FileHelper.pagesSavePath, filename)
+                File(fileSavePath).writeText(text)
+
+                if (pageCounter.get() < targetPageCount) {
+                    FileHelper.indexFile.appendText("$pageCounter $url\n")
+                    pageCounter.incrementAndGet()
+                } else {
+                    isCrawlerRunning.set(false)
+                    return
+                }
+
+                println("Added $url to $filename, words count = $wordCount ")
+            } else {
+                println("Skipped $url, words count = $wordCount ")
+            }
+
+            visited.add(url)
+
+            val links = doc.select("a[href]").mapNotNull { it.absUrl("href").normalizeUrl() }.filter {
+                visited.contains(it).not() && urlsQueue.contains(it).not() && it.startsWith("http")
+            }.toSet()
+            urlsQueue.addAll(links)
+        }.onFailure {
+            println("Failed to process $url: ${it.message}")
+        }
+    }
+
+
+    companion object {
+        private const val DEFAULT_TARGET_PER_PAGE_COUNT = 100
+        private const val DEFAULT_MIN_WORDS_PER_COUNT = 1000
+    }
+
+}
+
+

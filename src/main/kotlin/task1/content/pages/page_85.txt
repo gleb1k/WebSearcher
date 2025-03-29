@@ -1,0 +1,372 @@
+Хабрβ Открыть список Как стать автором Моя лентаВсе потокиРазработкаАдминистрированиеДизайнМенеджментМаркетингНаучпоп Поиск Написать публикацию Настройки Войти Обновить alex0x08 1 час назад Отбитый дотнет Уровень сложностиСредний Время на прочтение10 мин Количество просмотров 705 Ненормальное программирование*.NET*Программирование*Разработка под Linux* Обзор Поскольку прошлая статья про «особенную» Java вызвала интерес, мы решили продолжить праздник. Настало время познакомить разработчиков С# с темной стороной любимой технологии — сегодня шатаем .NET! Вводная Платформа .NET и самый популярный язык для нее C#, как и Java, имеют четкую и однозначную спецификацию, сама разработка ведется на очень высоком уровне, при поддержке и участии как самой корпорации Microsoft, так и сторонних контрибуторов. Как и Java — .NET является законченным промышленным решением для практически любого типа разработки, как и Java — C# считается безопасным. Хотя я до сих пор не понимаю — как и чем может быть опасен для человека язык программирования. Как и в мире Java, разработчики на .NET не очень любят трюки и недокументированные особенности, поэтому примеры ниже точно станут сюрпризом для большинства. Тестовая среда Ради большего накала радости и веселья, в качестве тестовой среды была взят .NET Core 9 для Linux. Заодно этот шаг позволит сократить объем причитаний, отмазок и оговорок про особенности Windows и тяжелое прошлое. К сожалению в Linux-версии дотнета зачем-то удалили поддержку компиляции отдельных .cs файлов, оставив только сборку проекта целиком с помощью специального скрипта сборки. Создавать который для каждого однострочника — перебор, даже для автора. Для исправления ситуации пришлось использовать специальный bash-скрипт, для вызова компилятора в ручном режиме: #!/bin/bash
+
+#dotnethome=`dirname "$0"`
+dotnethome=`dirname \`which dotnet\``
+sdkver=$(dotnet --version)
+fwkver=$(dotnet --list-runtimes | grep Microsoft.NETCore.App | awk '{printf("%s", $2)}')
+tfm="net${fwkver%.*}"
+dotnetlib=$dotnethome/packs/Microsoft.NETCore.App.Ref/$fwkver/ref/$tfm
+
+if [ "$#" -lt 1 ]; then
+	dotnet $dotnethome/sdk/$sdkver/Roslyn/bincore/csc.dll -help
+	exit 1
+fi
+if ! test -f "csc-$fwkver.rsp"; then
+  for f in  $dotnetlib/*.dll; do
+	echo -r:$(basename $f) >> /tmp/csc-$fwkver.rsp
+  done
+fi
+
+for arg in "$@"
+do
+	if [[ "$arg" == *"out:"* ]]; then
+	  prog="${arg:5}"
+	  break
+	fi
+	if [[ "$arg" == *".cs" ]]; then
+	  prog="${arg%.*}.dll"
+	fi
+
+
+done
+dotnet $dotnethome/sdk/$sdkver/Roslyn/bincore/csc.dll -nologo -out:"$prog" -lib:"$dotnetlib" @/tmp/csc-$fwkver.rsp $* 
+if [ $? -eq 0 ]; then
+  if test -f "$prog"; then
+    if [[ "$*" != *"t:library"* ]] && [[ "$*" != *"target:library"* ]]; then
+	if ! test -f "${prog%.*}.runtime.config"; then
+		echo "{
+  \"runtimeOptions\": {
+    \"framework\": {
+      \"name\": \"Microsoft.NETCore.App\",
+      \"version\": \"$fwkver\"
+    }
+  }
+}"  > "${prog%.*}.runtimeconfig.json"
+	fi
+    fi
+  fi
+fi Соответственно все приведенные ниже примеры собирались с помощью этого замечательного bash-скрипта. Дичь первая: минимал Не совсем дичь, но всегда было интересно узнать как выглядит минимально возможный код на C#, который возможно успешно собрать. Так: {} В работе: Программа, которая не делает ничего, но собирается и запускается, занимая при этом 3.5kb места — видимо в Microsoft наконец поняли дзен. Sharplab , твит автора. Дичь вторая: изменяемый «read only» Система наследования общих классов в C# не настолько хорошо продумана как в Java, поэтому временами получаются нехорошие вещи: using System;
+using System.Collections.Generic;
+
+var list = new List<int>{1, 2, 3, 4};
+
+IReadOnlyList<int> readonlyList = list;
+
+// вызовет ошибку error CS1061 
+// readonlyList.Add(5);
+
+// сработает
+((List<int>)readonlyList).Add(5);
+
+// 5
+Console.WriteLine(readonlyList.Count); Sharplab, отличное объяснение происходящего на StackOverflow и даже видео: Вариант без кастования действительно не дает собрать такой код: Но с кастованием все замечательно собирается и работает: Дичь третья: изменяемые константы Оставлю для истории, поскольку в новых версиях дотнета уже не работает: using System;
+using System.IO;
+
+Console.WriteLine(Path.DirectorySeparatorChar); // печатает '\'
+
+var f = (in char x) => { /* нельзя изменить 'x' внутри этого блока */ };
+f = (ref char x) => { x = 'A'; }; // но возможно тут!
+
+f(Path.DirectorySeparatorChar);
+
+Console.WriteLine(Path.DirectorySeparatorChar); // печатает'A' Sharplab (обратите внимание на версию дотнета), твит автора. Дичь четвертая: упоротый async await Рубрика «вопросы с собеседования», расскажите что делает этот код: async async async(async async) => 
+        await async; Да, это действительно работающий код на C#, просто не весь — для работы двух строк такой дичи требуется поддерживающая простыня из костылей: class await : INotifyCompletion {
+    public bool IsCompleted => true;
+    public void GetResult() { }
+    public void OnCompleted(Action continuation) { }
+}
+
+[AsyncMethodBuilder(typeof(builder))]
+class async { 
+    public await GetAwaiter() => throw null;
+}
+
+class builder
+{
+    public builder() { }
+    public static builder Create() => new();
+    public void SetResult() { }
+    public void SetException(Exception e) { }
+    public void Start<TStateMachine>(ref TStateMachine stateMachine)
+        where TStateMachine : IAsyncStateMachine => throw null;
+    public async Task => null;
+    public void AwaitOnCompleted<TAwaiter, TStateMachine>(
+        ref TAwaiter awaiter, ref TStateMachine stateMachine)
+        where TAwaiter : INotifyCompletion
+        where TStateMachine : IAsyncStateMachine => throw null;
+    public void AwaitUnsafeOnCompleted<TAwaiter, TStateMachine>(
+        ref TAwaiter awaiter, ref TStateMachine stateMachine)
+        where TAwaiter : ICriticalNotifyCompletion
+        where TStateMachine : IAsyncStateMachine => throw null;
+    public void SetStateMachine(IAsyncStateMachine stateMachine) => throw null;
+} Более детальный gist с построчным объяснением, твит автора и Sharplab. Пруф корректной компиляции и запуска: Еще более упоротый вариант: [async, async<async>] async async async([async<async>, async] (async async, async) async)
+        => await async.async; Твит автора и полная версия кода на sharplab. Тут аналогичный принцип — ради однострочника пришлось ваять кучу поддерживающего эту дичь кода. Дичь пятая: вызов без инициализации Еще одна отбитая интересная вещь, ненужная психически здоровым людям и невозможная в Java, но по какой-то неведомой причине доступная в дотнете: using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Reflection;
+using System.Runtime.Serialization;
+
+namespace Rextester
+{
+    public class Program
+    {
+        public static void Main(string[] args)
+        {
+      Evil e = (Evil)FormatterServices.GetUninitializedObject(typeof(Evil));
+      e.PrintValue();
+        }
+    }
+    
+    public class Evil
+    {
+        private int _value = 4;
+        
+        private Evil() 
+        {
+            Console.WriteLine("constructed");
+        }
+        
+        public void PrintValue()
+        {
+            Console.WriteLine("Value is {0}", _value);
+        }
+    }
+} Взято отсюда. Пруф работы: Чем это плохо? Тем что вы получаете экземпляр класса, но без инициализации, задуманной автором, при этом работают методы. Еще один, не менее отбитый вариант с ручным вызовом приватного конструктора: using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Reflection;
+
+namespace Rextester
+{
+    public class Program
+    {
+        public static void Main(string[] args)
+        {
+  Evil e = (Evil)typeof(Evil)
+  .GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance).Single()
+  .Invoke(null);
+        }
+    }
+    
+    public class Evil
+    {
+        private Evil() 
+        {
+            Console.WriteLine("constructed");
+        }
+    }
+} Источник. Да, это тоже работает: Таким способом можно получить контроль над инициализацией класса — приватные конструкторы, как вы наверное догадываетесь, не предназначены для вызова снаружи. Дичь шестая: угар по гречески Код C# ниже является полностью валидным и замечательно компилируется, хотя и требует ключ «/unsafe»: using System;
+unsafe class Program
+{
+    delegate void bar(int* i);
+    static Index ƛ(bar β) => default;
+    static void Main(string[] args)
+    {
+        int[] ω = { };
+        int Ʃ = 42;
+        int? Φ = 10;
+        var ϼ = ω;
+        
+ϼ=ω[ƛ(β:Δ=>Φ??=ω[^++Ʃ]/Ʃ|*&Δ[-0%Ʃ]>>1^Φ??0!&~(δ:Ʃ,^Φ..).δ)..(1_0>.0?Ʃ:0b1)];
+    }
+} Твит автора, Sharplab. К сожалению при запуске возникает ошибка, отлаживать которую в столь упоротом интересном коде несколько проблематично даже для автора. Пруф: Дичь седьмая: рефлексия без рефлексии Цитируя комментарий оригинального автора: How about changing private fields without unsafe or reflection? I bet you thought C# was type safe. Nothing is truly black and white. становится очевидно, что он «все понял» и достиг просвящения: using System.Reflection;
+using System.Runtime.InteropServices;
+using System;
+
+public class Alpha
+{
+    public int A;
+    private int B;
+
+    public Alpha()
+    {
+        this.A = 1337;
+        this.B = 42;
+    }
+
+    public void PrintB()
+    {
+        Console.WriteLine("My private field B is " + this.B);
+    }
+}
+
+public class Bravo
+{
+    public int A;
+    public int B;
+}
+
+[StructLayout(LayoutKind.Explicit, Pack = 1)]
+public struct Union
+{
+    [FieldOffset(0)] public Alpha AsAlpha;
+    [FieldOffset(0)] public Bravo AsBravo;
+}
+
+internal class Program
+{
+    static void Main(string[] args)
+    {
+        Alpha alpha = new Alpha();
+
+        // напечатает 42.
+        alpha.PrintB();
+
+        // Re-interpret as Bravo and change B to 1234.
+        Union union = new Union();
+        union.AsAlpha = alpha;
+        union.AsBravo.B = 1234;
+
+        // напечатает 1234.
+        alpha.PrintB();
+    }
+} Reddit. Да, это действительно работает: Возможность творить такое без использования спецального API для рефлексии — неожиданный сюрприз для анализаторов кода и антивирусов. Дичь восьмая: строка, которая хотела стать числом Код, компиляцию и запуск которого вы можете созерцать на заглавной картинке к статье: using System;
+
+// строгая типизация, говорите?
+String s = 42;
+
+// печатает 13
+Console.WriteLine(s); 
+
+class String {
+    public override string ToString() => "13";
+    public static implicit operator String(int i) => new();
+} Источник на Reddit, полная версия на Sharplab и статья с описанием. Сей замечательный пример — яркая иллюстрация, как можно одной строчкой кода выбесить даже очень хорошего разработчика: представьте, что класса String ниже нет, а вам задают вопрос «соберется такой код или нет» Дичь девятая: округление "по пацански" Посмотрите в глаза на этот замечательный код: using System;
+float x = 0.4f;
+float y = 0.6f;
+Console.WriteLine((double)x + (double)y == 1); // False
+Console.WriteLine((float)((double)x + (double)y) == 1); // True Твит автора, объяснение и тест на Sharplab. Как говорится комментарии излишни, отмечу лишь что работа с типами double и float чаще всего происходит в геймдеве и каждая подобная ошибка может стоить неделю отладки «в мыле и с красными глазами». Пруф: Дичь десятая: в стихах! Да, это тоже абсолютно рабочий и валидный код на C#: var x = i is null or not null or add 
+		or and and alias or ascending and args 
+		or async and await or by and descending 
+		or dynamic and equals or from and get 
+		or global and group or init and into 
+		or join and let or managed and nameof 
+		or nint or notnull and nuint or on and 
+		or or orderby and  record and remove 
+		or select and set or unmanaged 
+		and value or var and when or where and with or yield;
+    
+Console.WriteLine(x); Твит автора и Sharplab с полной версией. Разумеется тут снова используется простыня поддерживающего кода (см. пример на Sharplab), без которого ничего не заработает. Но как красиво получилось! Пруф: Еще Никаких сил не хватит разбирать всю возможную дичь в дотнете, поэтому ниже одной строкой по самому интересному. 1. Замечательная презентация «.NET 052: Abusing C#, Calendars, Epochs and the .NET Functions Framework with Jon Skeet» с отдельным репозиторием для хранения дичи. 2. Gist с небольшим примером насилия (abuse) над операторами: [TestClass]
+public class OperatorAbuseTest
+{
+    [TestMethod]
+    public void TestTheAbuse()
+    {
+        var repeat = Operators.Repeat<string>();
+        var join = Operators.Join<string>();
+        var result = "Hello" <repeat> 3 <join> ",";
+        var expected = "Hello,Hello,Hello";
+        Assert.AreEqual(expected, result);
+    }
+}
+
+public static class Operators
+{
+    public static Operator<T, int, IEnumerable<T>> Repeat<T>()
+    {
+        return new Operator<T, int, IEnumerable<T>>(Enumerable.Repeat);
+    }
+
+    public static Operator<IEnumerable<T>, string, string> Join<T>()
+    {
+        return new Operator<IEnumerable<T>, string, string>((values, separator) => string.Join(separator, values));
+    }
+}
+
+public class Operator<TLeft, TRight, TResult>
+{
+    private readonly Func<TLeft, TRight, TResult> func;
+
+    public Operator(Func<TLeft, TRight, TResult> func)
+    {
+        this.func = func;
+    }
+
+    public static PartialOperator<TLeft, TRight, TResult> operator <(TLeft lhs, Operator<TLeft, TRight, TResult> op)
+    {
+        return new PartialOperator<TLeft, TRight, TResult>(lhs, op.func);
+    }
+
+    public static PartialOperator<TLeft, TRight, TResult> operator >(TLeft lhs, Operator<TLeft, TRight, TResult> op)
+    {
+        return new PartialOperator<TLeft, TRight, TResult>(lhs, op.func);
+    }
+}
+
+public class PartialOperator<TLeft, TRight, TResult>
+{
+    private readonly Func<TLeft, TRight, TResult> func;
+    private readonly TLeft left;
+
+    internal PartialOperator(TLeft left, Func<TLeft, TRight, TResult> func)
+    {
+        this.left = left;
+        this.func = func;
+    }
+
+    public static TResult operator >(PartialOperator<TLeft, TRight, TResult> op, TRight rhs)
+    {
+        return op.func(op.left, rhs);
+    }
+
+    public static TResult operator <(PartialOperator<TLeft, TRight, TResult> op, TRight rhs)
+    {
+        return op.func(op.left, rhs);
+    }
+} 3. Обсуждение на Reddit, посвященное самой отбитой дичи на C#: What's the most insane thing you can do in C#? 4. Обсуждение на StackOverflow, посвященное подмене метода в работающем приложении на С#: Dynamically replace the contents of a C# method? 5. Еще один Gist с реализацией stdin/stdout в стиле C++: using System;
+using System.Reflection;
+using System.Diagnostics;
+
+int a = default;
+string s = default;
+_ = Std.In >> __makeref(a) >> __makeref(s);
+_ = Std.Out << a << s << "\n";
+
+public static unsafe class Std
+{
+    public sealed class OutImpl
+    {
+        public static OutImpl Singleton { get; } = new();
+        
+        private OutImpl() { }
+        
+        public static OutImpl operator <<(OutImpl self, object o)
+        {
+            if (object.ReferenceEquals(o, EndL)) o = "\n";
+            Console.WriteLine(o);
+            return self;
+        }
+    }
+
+    public sealed class InImpl
+    {
+        public static InImpl Singleton { get; } = new();
+        
+        private InImpl() { }
+        
+        private static readonly MethodInfo _parseMethod = typeof(InImpl).GetMethod(nameof(SetToParsed), BindingFlags.Static | BindingFlags.NonPublic)!;
+
+        public static InImpl operator >>(InImpl self, TypedReference t)
+        {
+            var line = Console.ReadLine() ?? throw new UnreachableException();
+            Type type = __reftype(t);
+            if (type.IsAssignableTo(typeof(IParsable<>).MakeGenericType(type)))
+            {
+                _parseMethod.MakeGenericMethod(type).Invoke(null, [Pointer.Box(&t, typeof(TypedReference*)), line]);
+                return self;
+            }
+            throw new NotSupportedException();
+        }
+
+        private static void SetToParsed<T>(TypedReference* t, string toParse) where T : IParsable<T>
+        {
+            __refvalue(*t, T) = T.Parse(toParse, null);
+        }
+    }
+    
+    public static OutImpl Out => OutImpl.Singleton;
+    public static object EndL { get; } = new();
+    public static InImpl In => InImpl.Singleton;
+} 6. Подборка дичи в репозитории на Github, откуда была взята часть материала. 7. Еще одна подборка, но уже в виде отдельной статьи с картинками. Эпилог Надеюсь приведенные примеры разрушат ваш сон и покой несколько расширят понимание технологии.NET и дурные мысли про некие «безопасность и надежность» навсегда вас покинут. Знание приносит страх. (ц) Futurama А если серьезно, просто не надо использовать такой код в реальных проектах, благо что каждый пример — повод к немедленному увольнению. Более веселый оригинал статьи как обычно в нашем блоге. Теги: c# .net net core dotnet core дичь Хабы: Ненормальное программирование .NET Программирование Разработка под Linux Нравится +5 Не нравится Добавить в закладки6 Комментарии 6 118 Карма 588.7 Рейтинг Alex Chernyshev @alex0x08 Немного понимаю в компьютерах Подписаться Отправить сообщение СайтСайтСайтСайтTwitterВКонтактеGithubInstagramSkypeTelegram Комментарии Комментарии 6 Публикации Лучшие за суткиПохожие Показать лучшие за всё время Истории Работа .NET разработчик 49 вакансий Все вакансии Ближайшие события 31 марта Серия вебинаров «DevOps Middle: AvitoTech vs ecom.tech» Онлайн Больше событий в календаре Разработка Администрирование 3 апреля Реалити для разработчиков: узнайте, как строится новое публичное облако MWS Онлайн Больше событий в календаре Разработка 3 апреля Открытая встреча «System Analysis Meetup SberHealth» Москва • Онлайн Больше событий в календаре Аналитика 4 – 5 апреля Геймтон «DatsCity» Онлайн Больше событий в календаре Разработка 8 апреля Конференция TEAMLY WORK MANAGEMENT 2025 Москва • Онлайн Больше событий в календаре Менеджмент Другое 10 апреля «GoCloud 2025» — масштабная IT-конференция про облака и AI Москва • Онлайн Больше событий в календаре Разработка Администрирование Менеджмент 15 – 16 апреля Форум «Российская неделя ЦОД»: конференции «В Облаке.РФ» и TechDay Москва • Онлайн Больше событий в календаре Разработка Менеджмент Другое 17 – 19 апреля Курс: «Клиентские данные в энтерпрайзе» Москва Больше событий в календаре Аналитика Тестирование Другое 25 – 26 апреля IT-конференция Merge Tatarstan 2025 Казань Больше событий в календаре Разработка Маркетинг Другое 25 апреля Кейс-конференция «Клиника на миллиард: лидеры делятся опытом построения клиник» Москва • Онлайн Больше событий в календаре Менеджмент Другое 20 – 22 июня Летняя айти-тусовка Summer Merge Ульяновская область Больше событий в календаре Разработка Другое Влево Вправо Ваш аккаунт Войти Регистрация Разделы Статьи Новости Хабы Компании Авторы Песочница Информация Устройство сайта Для авторов Для компаний Документы Соглашение Конфиденциальность Услуги Корпоративный блог Медийная реклама Нативные проекты Образовательные программы Стартапам Facebook Twitter VK Telegram Youtube Яндекс Дзен Настройка языкаТехническая поддержка © 2006–2025, Habr
