@@ -10,13 +10,15 @@ object FileHelper {
 
     private const val DEFAULT_LEMMATIZED_PATH = "\\src\\main\\kotlin\\task2\\content"
 
-    val indexFile = File(getSavePath(DEFAULT_INDEX_PATH) + "/index.txt").apply {
-        writeText("")
-    }
+    private const val DEFAULT_INVERTED_INDEX_PATH = "\\src\\main\\kotlin\\task3\\content"
+
+    val indexSavePath = getSavePath(DEFAULT_INDEX_PATH)
 
     val pagesSavePath = getSavePath(DEFAULT_PAGES_PATH)
 
     val lemmatizedSavePath = getSavePath(DEFAULT_LEMMATIZED_PATH)
+
+    val invertedIndexSavePath = getSavePath(DEFAULT_INVERTED_INDEX_PATH)
 
     fun getSavePath(path: String): String {
         val projectRoot = System.getProperty("user.dir")

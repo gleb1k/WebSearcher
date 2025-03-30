@@ -5,12 +5,12 @@ import java.util.*
 import com.github.demidko.aot.WordformMeaning.lookupForMeanings
 import java.io.File
 
-class Lemmatizer {
+object Lemmatizer {
 
     fun execute() {
-        for (i in 1..100) {
+        for (docId in 1..100) {
             runCatching {
-                val pageName = FileHelper.getPageSaveName(i)
+                val pageName = FileHelper.getPageSaveName(docId)
                 val pagePath = FileHelper.getPageSavePath(FileHelper.pagesSavePath, pageName)
                 val pageContent = FileHelper.readFileToString(pagePath)
 
@@ -25,13 +25,14 @@ class Lemmatizer {
                     //3
                     .filter { it !in StopWordsHelper.stopWords }
 
+                //4
                 val fileSavePath =
-                    FileHelper.getPageSavePath(FileHelper.lemmatizedSavePath, FileHelper.getLemmatizedSaveName(i))
+                    FileHelper.getPageSavePath(FileHelper.lemmatizedSavePath, FileHelper.getLemmatizedSaveName(docId))
                 File(fileSavePath).writeText(lemmatizedWords.joinToString("\n"))
 
-                println("Lemmatized file $i")
+                println("Lemmatized file $docId")
             }.onFailure {
-                println("Failed to process file $i: ${it.message}")
+                println("Failed to process file $docId: ${it.message}")
             }
         }
     }

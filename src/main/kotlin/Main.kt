@@ -3,6 +3,8 @@ package ru.glebik
 import kotlinx.coroutines.runBlocking
 import ru.glebik.task1.ParallelWebCrawler
 import ru.glebik.task2.Lemmatizer
+import ru.glebik.task3.InvertedIndexBuilder
+import ru.glebik.task3.InvertedIndexParser
 
 
 fun main() = runBlocking {
@@ -11,11 +13,27 @@ fun main() = runBlocking {
         "https://vk.com/glebgafeev"
     )
 
-    val parallelWebCrawler = ParallelWebCrawler(urls)
-
     //task 1
-    parallelWebCrawler.crawl()
+    ParallelWebCrawler(urls).crawl()
 
     //task 2
-    Lemmatizer().execute()
+    Lemmatizer.execute()
+
+    //task3
+    val invertedIndex = InvertedIndexBuilder.buildInvertedIndex()
+
+    val queries = listOf(
+        "например & открыть | текст",
+        "например & !открыть | !текст",
+        "например | открыть | текст",
+        "например | !открыть | !текст",
+        "например & открыть & текст"
+    )
+
+    queries.forEach {
+        InvertedIndexParser.parse(
+            query = it,
+            index = invertedIndex.index
+        )
+    }
 }

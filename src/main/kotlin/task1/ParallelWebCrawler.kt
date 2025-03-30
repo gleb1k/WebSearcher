@@ -4,6 +4,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Semaphore
 import org.jsoup.Jsoup
 import ru.glebik.FileHelper
+import ru.glebik.FileHelper.indexSavePath
 import ru.glebik.FileHelper.normalizeUrl
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -19,6 +20,10 @@ class ParallelWebCrawler(
     private val visited = ConcurrentHashMap.newKeySet<String>()
     private val urlsQueue = ConcurrentLinkedQueue<String>().apply {
         addAll(urls)
+    }
+
+    val indexFile = File("$indexSavePath/index.txt").apply {
+        writeText("")
     }
 
     private var pageCounter = AtomicInteger(1)
@@ -61,7 +66,7 @@ class ParallelWebCrawler(
                 File(fileSavePath).writeText(text)
 
                 if (pageCounter.get() < targetPageCount) {
-                    FileHelper.indexFile.appendText("$pageCounter $url\n")
+                    indexFile.appendText("$pageCounter $url\n")
                     pageCounter.incrementAndGet()
                 } else {
                     isCrawlerRunning.set(false)
