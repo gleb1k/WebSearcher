@@ -1,8 +1,6 @@
 package ru.glebik
 
 import kotlinx.coroutines.runBlocking
-import ru.glebik.task1.ParallelWebCrawler
-import ru.glebik.task2.Lemmatizer
 import ru.glebik.task3.InvertedIndexBuilder
 import ru.glebik.task3.InvertedIndexParser
 
@@ -14,10 +12,10 @@ fun main() = runBlocking {
     )
 
     //task 1
-    ParallelWebCrawler(urls).crawl()
+    //ParallelWebCrawler(urls).crawl()
 
     //task 2
-    Lemmatizer.execute()
+    //Lemmatizer.execute()
 
     //task3
     val invertedIndex = InvertedIndexBuilder.buildInvertedIndex()
@@ -33,7 +31,10 @@ fun main() = runBlocking {
     queries.forEach {
         InvertedIndexParser.parse(
             query = it,
-            index = invertedIndex.index
+            index = invertedIndex.indexMap
         )
     }
+
+    //task4
+
 }
