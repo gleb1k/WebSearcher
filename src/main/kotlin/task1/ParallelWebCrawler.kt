@@ -1,7 +1,9 @@
 package ru.glebik.task1
 
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import org.jsoup.Jsoup
 import ru.glebik.FileHelper
 import ru.glebik.FileHelper.indexSavePath
@@ -25,6 +27,8 @@ class ParallelWebCrawler(
     val indexFile = File("$indexSavePath/index.txt").apply {
         writeText("")
     }
+
+    val mutex = Mutex()
 
     private var pageCounter = AtomicInteger(1)
     private var isCrawlerRunning = AtomicBoolean(true)
@@ -52,14 +56,19 @@ class ParallelWebCrawler(
         println("Downloaded $pageCounter pages.")
     }
 
-    private fun crawlPage(url: String?) {
+    private suspend fun crawlPage(url: String?) {
         runCatching {
             if (url == null || visited.contains(url)) return
 
             val doc = Jsoup.connect(url).userAgent("Mozilla").get()
-            val text = doc.body().text()
+            val rawHtml = doc.body().html()
+            val text = rawHtml
+                .replace(Regex("<[^>]+>"), " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
 
-            val wordCount = text.split("\\s+".toRegex()).size
+            val cyrillicWords = Regex("[а-яА-ЯёЁ]+").findAll(text).map { it.value }.toList()
+            val wordCount = cyrillicWords.size
             if (wordCount >= minWordsPerPage) {
                 val filename = FileHelper.getPageSaveName(pageCounter.get())
                 val fileSavePath = FileHelper.getPageSavePath(FileHelper.pagesSavePath, filename)
@@ -78,12 +87,15 @@ class ParallelWebCrawler(
                 println("Skipped $url, words count = $wordCount ")
             }
 
-            visited.add(url)
-
-            val links = doc.select("a[href]").mapNotNull { it.absUrl("href").normalizeUrl() }.filter {
-                visited.contains(it).not() && urlsQueue.contains(it).not() && it.startsWith("http")
-            }.toSet()
-            urlsQueue.addAll(links)
+            mutex.withLock {
+                visited.add(url)
+                val links = doc.select("a[href]")
+                    .mapNotNull { it.absUrl("href").normalizeUrl() }
+                    .filter {
+                        visited.contains(it).not() && urlsQueue.contains(it).not() && it.startsWith("http")
+                    }.toSet()
+                urlsQueue.addAll(links)
+            }
         }.onFailure {
             println("Failed to process $url: ${it.message}")
         }
