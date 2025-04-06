@@ -12,6 +12,8 @@ object FileHelper {
 
     private const val DEFAULT_INVERTED_INDEX_PATH = "\\src\\main\\kotlin\\task3\\content"
 
+    private const val DEFAULT_CSV_PATH = "\\src\\main\\kotlin\\task4\\content"
+
     val indexSavePath = getSavePath(DEFAULT_INDEX_PATH)
 
     val pagesSavePath = getSavePath(DEFAULT_PAGES_PATH)
@@ -19,6 +21,8 @@ object FileHelper {
     val lemmatizedSavePath = getSavePath(DEFAULT_LEMMATIZED_PATH)
 
     val invertedIndexSavePath = getSavePath(DEFAULT_INVERTED_INDEX_PATH)
+
+    val csvSavePath = getSavePath(DEFAULT_CSV_PATH)
 
     fun getSavePath(path: String): String {
         val projectRoot = System.getProperty("user.dir")

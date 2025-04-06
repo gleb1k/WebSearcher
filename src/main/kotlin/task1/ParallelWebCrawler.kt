@@ -24,43 +24,29 @@ class ParallelWebCrawler(
         addAll(urls)
     }
 
-    val indexFile = File("$indexSavePath/index.txt").apply {
+    private val indexFile = File("$indexSavePath/index.txt").apply {
         writeText("")
     }
 
-    val mutex = Mutex()
+    private var pageCounter = 1
 
-    private var pageCounter = AtomicInteger(1)
-    private var isCrawlerRunning = AtomicBoolean(true)
-    private val semaphore = Semaphore(30)
-
-    suspend fun crawl() = coroutineScope {
+    fun crawl() {
         if (urls.isEmpty()) {
-            return@coroutineScope
+            return
         }
 
-        val jobs = mutableListOf<Job>()
-
-        while (isCrawlerRunning.get()) {
-            if (urlsQueue.isNotEmpty() && pageCounter.get() <= targetPageCount) {
-                val url = urlsQueue.poll().normalizeUrl()
-                jobs += launch(SupervisorJob() + Dispatchers.IO) {
-                    semaphore.acquire()
-                    crawlPage(url)
-                    semaphore.release()
-                }
-            }
+        while (urlsQueue.isNotEmpty() && pageCounter <= targetPageCount) {
+            val url = urlsQueue.poll().normalizeUrl()
+            crawlPage(url)
         }
     }
 
-    private suspend fun crawlPage(url: String?) {
-        runCatching {
-            mutex.withLock {
-                if (url == null || visited.contains(url) || urlsQueue.contains(url)) return
-                visited.add(url)
-            }
 
-            val doc = Jsoup.connect(url.orEmpty()).userAgent("Mozilla").get()
+    private fun crawlPage(url: String?) {
+        runCatching {
+            if (url == null || visited.contains(url) || urlsQueue.contains(url)) return
+
+            val doc = Jsoup.connect(url).userAgent("Mozilla").get()
             val rawHtml = doc.body().html()
             val text = rawHtml
                 .replace(Regex("<[^>]+>"), " ")
@@ -70,31 +56,26 @@ class ParallelWebCrawler(
             val cyrillicWords = Regex("[а-яА-ЯёЁ]+").findAll(text).map { it.value }.toList()
             val wordCount = cyrillicWords.size
             if (wordCount >= minWordsPerPage) {
-                val filename = FileHelper.getPageSaveName(pageCounter.get())
+                val filename = FileHelper.getPageSaveName(pageCounter)
                 val fileSavePath = FileHelper.getPageSavePath(FileHelper.pagesSavePath, filename)
-                mutex.withLock {
-                    if (pageCounter.get() <= targetPageCount) {
-                        File(fileSavePath).writeText(text)
-                        indexFile.appendText("${pageCounter.get()} $url\n")
-                        println("Added page $pageCounter $url to $filename, words count = $wordCount ")
-                        pageCounter.incrementAndGet()
-                    } else {
-                        isCrawlerRunning.set(false)
-                        return
-                    }
-                }
+
+                File(fileSavePath).writeText(text)
+                indexFile.appendText("$pageCounter $url\n")
+                println("Added page $pageCounter $url to $filename, words count = $wordCount ")
+                pageCounter++
+
             } else {
                 println("Skipped $url, words count = $wordCount ")
             }
 
-            mutex.withLock {
-                val links = doc.select("a[href]")
-                    .mapNotNull { it.absUrl("href").normalizeUrl() }
-                    .filter {
-                        visited.contains(it).not() && urlsQueue.contains(it).not() && it.startsWith("http")
-                    }.toSet()
-                urlsQueue.addAll(links)
-            }
+            val links = doc.select("a[href]")
+                .mapNotNull { it.absUrl("href").normalizeUrl() }
+                .filter {
+                    visited.contains(it).not() && urlsQueue.contains(it).not() && it.startsWith("http")
+                }.toSet()
+            visited.add(url)
+            urlsQueue.addAll(links)
+
         }.onFailure {
             println("Failed to process $url: ${it.message}")
         }
