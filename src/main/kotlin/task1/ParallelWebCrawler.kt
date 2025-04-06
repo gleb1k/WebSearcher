@@ -42,7 +42,7 @@ class ParallelWebCrawler(
         val jobs = mutableListOf<Job>()
 
         while (isCrawlerRunning.get()) {
-            if (urlsQueue.isNotEmpty() && pageCounter.get() < targetPageCount) {
+            if (urlsQueue.isNotEmpty() && pageCounter.get() <= targetPageCount) {
                 val url = urlsQueue.poll().normalizeUrl()
                 jobs += launch(SupervisorJob() + Dispatchers.IO) {
                     semaphore.acquire()
@@ -51,16 +51,16 @@ class ParallelWebCrawler(
                 }
             }
         }
-
-        jobs.forEach { it.cancel() }
-        println("Downloaded $pageCounter pages.")
     }
 
     private suspend fun crawlPage(url: String?) {
         runCatching {
-            if (url == null || visited.contains(url)) return
+            mutex.withLock {
+                if (url == null || visited.contains(url) || urlsQueue.contains(url)) return
+                visited.add(url)
+            }
 
-            val doc = Jsoup.connect(url).userAgent("Mozilla").get()
+            val doc = Jsoup.connect(url.orEmpty()).userAgent("Mozilla").get()
             val rawHtml = doc.body().html()
             val text = rawHtml
                 .replace(Regex("<[^>]+>"), " ")
@@ -72,23 +72,22 @@ class ParallelWebCrawler(
             if (wordCount >= minWordsPerPage) {
                 val filename = FileHelper.getPageSaveName(pageCounter.get())
                 val fileSavePath = FileHelper.getPageSavePath(FileHelper.pagesSavePath, filename)
-                File(fileSavePath).writeText(text)
-
-                if (pageCounter.get() < targetPageCount) {
-                    indexFile.appendText("$pageCounter $url\n")
-                    pageCounter.incrementAndGet()
-                } else {
-                    isCrawlerRunning.set(false)
-                    return
+                mutex.withLock {
+                    if (pageCounter.get() <= targetPageCount) {
+                        File(fileSavePath).writeText(text)
+                        indexFile.appendText("${pageCounter.get()} $url\n")
+                        println("Added page $pageCounter $url to $filename, words count = $wordCount ")
+                        pageCounter.incrementAndGet()
+                    } else {
+                        isCrawlerRunning.set(false)
+                        return
+                    }
                 }
-
-                println("Added $url to $filename, words count = $wordCount ")
             } else {
                 println("Skipped $url, words count = $wordCount ")
             }
 
             mutex.withLock {
-                visited.add(url)
                 val links = doc.select("a[href]")
                     .mapNotNull { it.absUrl("href").normalizeUrl() }
                     .filter {

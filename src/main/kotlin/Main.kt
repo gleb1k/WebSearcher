@@ -17,25 +17,25 @@ fun main() = runBlocking {
     ParallelWebCrawler(urls).crawl()
 
     //task 2
-    Lemmatizer.execute()
+    //Lemmatizer.execute()
 
     //task3
-    val invertedIndex = InvertedIndexBuilder.buildInvertedIndex()
+    //val invertedIndex = InvertedIndexBuilder.buildInvertedIndex()
 
-    val queries = listOf(
-        "например & открыть & текст",
-        "например & !открыть & !текст",
-        "например | открыть | текст",
-        "например | !открыть | !текст",
-        "например & открыть & текст"
-    )
-
-    queries.forEach {
-        InvertedIndexParser.parse(
-            query = it,
-            index = invertedIndex.indexMap
-        )
-    }
+//    val queries = listOf(
+//        "например & открыть & текст",
+//        "например & !открыть & !текст",
+//        "например | открыть | текст",
+//        "например | !открыть | !текст",
+//        "например & открыть & текст"
+//    )
+//
+//    queries.forEach {
+//        InvertedIndexParser.parse(
+//            query = it,
+//            index = invertedIndex.indexMap
+//        )
+//    }
 
     //task4
 
