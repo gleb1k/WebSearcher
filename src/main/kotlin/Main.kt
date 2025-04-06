@@ -3,6 +3,7 @@ package ru.glebik
 import ru.glebik.task3.InvertedIndexBuilder
 import ru.glebik.task4.TermMetricsCalculator
 import ru.glebik.task4.TfWord
+import ru.glebik.task5.WebSearcher
 import java.io.FileOutputStream
 import java.io.OutputStream
 
@@ -51,46 +52,19 @@ fun main() {
     //tf-idf
     val tfIdfDocuments = termMetricsCalculator.calculateTfIdf(tfDocuments, idfMap)
     FileOutputStream("${FileHelper.csvSavePath}/tf_idf.csv").apply { writeTfWordsCsv(tfIdfDocuments) }
-}
 
-fun OutputStream.writeCsvMap(map: Map<String, Any>, name1: String, name2: String) {
-    val writer = bufferedWriter()
-    writer.write(""""$name1", "$name2"""")
-    writer.newLine()
-    map.forEach { (key, value) ->
-        writer.write("${key}, $value")
-        writer.newLine()
-    }
-    writer.flush()
-}
+    //task5
+    val ws = WebSearcher(tfIdfDocuments, idfMap)
+    val queries = listOf(
+        "кот",
+        "кот собака",
+        "как выбрать кота",
+        "совет какой купить автомобиль",
+        "рост прибыль"
+    )
 
-fun OutputStream.writeTfWordsCsv(tfWords: List<TfWord>) {
-    val writer = bufferedWriter()
-
-    // Сначала собираем все уникальные docId
-    val allDocIds = tfWords
-        .flatMap { it.docs }
-        .map { it.id }
-        .toSet()
-        .sorted()
-
-    // Записываем заголовок
-    writer.write("word" + allDocIds.joinToString(separator = ",", prefix = ",") { "doc$it" })
-    writer.newLine()
-
-    // Записываем строки
-    for (tfWord in tfWords) {
-        val tfMap = tfWord.docs.associate { it.id to it.tfValue }
-        val row = buildString {
-            append(tfWord.word)
-            for (docId in allDocIds) {
-                append(",")
-                append(tfMap[docId]?.toString() ?: "")
-            }
-        }
-        writer.write(row)
-        writer.newLine()
+    queries.forEach {
+        ws.search(it)
     }
 
-    writer.flush()
 }

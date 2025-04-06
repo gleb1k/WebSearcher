@@ -18,12 +18,7 @@ object Lemmatizer {
                 val pageContentArray = tokenize(pageContent)
 
                 //2
-                val lemmatizedWords = pageContentArray
-                    .mapNotNull {
-                        lookupForMeanings(it).firstOrNull()?.lemma?.toString()
-                    }
-                    //3
-                    .filter { it !in StopWordsHelper.stopWords }
+                val lemmatizedWords = lemmatize(pageContentArray)
 
                 //4
                 val fileSavePath =
@@ -45,4 +40,13 @@ object Lemmatizer {
         }
         return words
     }
+
+    private fun lemmatize(words: List<String>): List<String> {
+        return words.mapNotNull {
+            lookupForMeanings(it).firstOrNull()?.lemma?.toString()
+        }.filter { it !in StopWordsHelper.stopWords }
+    }
+
+    fun tokenizeAndLemmatize(query: String): List<String> = lemmatize(tokenize(query))
+
 }
