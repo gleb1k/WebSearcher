@@ -1,11 +1,12 @@
 package ru.glebik
 
+import ru.glebik.task1.ParallelWebCrawler
+import ru.glebik.task2.Lemmatizer
 import ru.glebik.task3.InvertedIndexBuilder
+import ru.glebik.task3.InvertedIndexParser
 import ru.glebik.task4.TermMetricsCalculator
-import ru.glebik.task4.TfWord
 import ru.glebik.task5.WebSearcher
 import java.io.FileOutputStream
-import java.io.OutputStream
 
 
 fun main() {
@@ -15,28 +16,28 @@ fun main() {
     )
 
     //task 1
-    //ParallelWebCrawler(urls).crawl()
+    ParallelWebCrawler(urls).crawl()
 
     //task 2
-    //Lemmatizer.execute()
+    Lemmatizer.execute()
 
     //task3
     val invertedIndex = InvertedIndexBuilder.buildInvertedIndex()
 
-//    val queries = listOf(
-//        "например & открыть & текст",
-//        "например & !открыть & !текст",
-//        "например | открыть | текст",
-//        "например | !открыть | !текст",
-//        "например & открыть & текст"
-//    )
-//
-//    queries.forEach {
-//        InvertedIndexParser.parse(
-//            query = it,
-//            index = invertedIndex.indexMap
-//        )
-//    }
+    val queries = listOf(
+        "например & открыть & текст",
+        "например & !открыть & !текст",
+        "например | открыть | текст",
+        "например | !открыть | !текст",
+        "например & открыть & текст"
+    )
+
+    queries.forEach {
+        InvertedIndexParser.parse(
+            query = it,
+            index = invertedIndex.indexMap
+        )
+    }
 
     //task4
     val termMetricsCalculator = TermMetricsCalculator(invertedIndex)
@@ -55,7 +56,7 @@ fun main() {
 
     //task5
     val ws = WebSearcher(tfIdfDocuments, idfMap)
-    val queries = listOf(
+    val queriesSearch = listOf(
         "кот",
         "кот собака",
         "как выбрать кота",
@@ -63,7 +64,7 @@ fun main() {
         "рост прибыль"
     )
 
-    queries.forEach {
+    queriesSearch.forEach {
         ws.search(it)
     }
 
